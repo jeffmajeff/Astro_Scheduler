@@ -17,6 +17,8 @@ from astropy.coordinates import SkyCoord, EarthLocation, AltAz, get_sun, get_moo
 #from astroplan import moon
 plt.style.use(astropy_mpl_style)
 import pandas as pd
+from matplotlib import gridspec
+import matplotlib.font_manager as fm
 
 ### PARAMETERS ###
 objectToObserve = SkyCoord.from_name('m33')
@@ -27,7 +29,7 @@ MAX_MOON_ILLUMINATION = 0.1
 MAX_MOON_ALT = 0 # degrees
 MAX_SUN_ALT= -7 # degrees
 startDate = dt.datetime(2019,1,1)
-endDate = dt.datetime(2019,12,31)
+endDate = dt.datetime(2019,1,31)
 
 def moon_illumination(thisTime):
     sun = get_sun(thisTime)
@@ -63,7 +65,7 @@ def evaluateDay(thisDate):
     nightTime = sunAltAllDay < (MAX_SUN_ALT * u.deg)
     moonLess = moonAltAllDay < (MAX_MOON_ALT * u.deg)
     goodHours = np.sum(objectVisible & nightTime & moonLess) * 0.25
-    deltaAngles = angleBetweenPolarVectors(objectAltAziAllDay,moonAltAziAllDay) # Great circle angle between the moon and the object
+    #deltaAngles = np.rad2deg(angleBetweenPolarVectors(objectAltAziAllDay,moonAltAziAllDay)) # Great circle angle between the moon and the object
 #    fig1 = plt.figure(num=None, figsize=(10, 6), dpi=80, facecolor='w', edgecolor='k')
 #    ax1 = fig1.add_subplot(1,1,1)
 #    ax1.plot(delta_midnight,objectAltAllDay,color='blue')
@@ -88,22 +90,31 @@ def plotGoodness():
     goodnessSeries.index =  pd.DatetimeIndex(dateData)
     # Create the figure. For the aspect ratio, one year is 7 days by 53 weeks.
     # We widen it further to account for the tick labels and color bar.
-    figsize = plt.figaspect(7 / 60)
-    fig = plt.figure(figsize=figsize)
+    #figsize = plt.figaspect(7 / 60)
+    fig = plt.figure(figsize=(15,3))
+    gs = gridspec.GridSpec(1, 16)
     
     # Plot the heatmap with a color bar.
-    ax = date_heatmap(goodnessSeries, edgecolor='black')
+    ax1 = plt.subplot(gs[0:12])
+    ax2 = plt.subplot(gs[12])
+    ax2.axis('off')
+    ax3 = plt.subplot(gs[13:])
+    ax1 = date_heatmap(goodnessSeries, edgecolor='black',ax=ax1)
     #plt.colorbar(ticks=np.arange(0,1,0.2), pad=0.02)
     plt.colorbar()
     
     # Force the cells to be square. If this is set, the size of the color bar
     # may look weird compared to the size of the heatmap. That can be corrected
     # by the aspect ratio of the figure or scale of the color bar.
-    ax.set_aspect('equal')
-    annot = ax.annotate("", (1.25, 0.6),
+    ax1.set_aspect('equal')
+    annot = ax2.annotate("", (0.1, 0.5),
                  xycoords="axes fraction", va="center", ha="center",
-                 bbox=dict(boxstyle="round, pad=1", fc="w"))
+                 bbox=dict(boxstyle="round, pad=1", fc="w"), fontsize=8)
     firstSunday = startDate - dt.timedelta(days=((startDate.weekday() + 1) % 7))
+    
+    font = fm.FontProperties(size=8)
+    for label in (ax3.get_xticklabels() + ax3.get_yticklabels()):
+        label.set_fontproperties(font)
     
     def update_annot(thisX,thisY):
         thisTime = firstSunday + dt.timedelta(days=thisY + (thisX * 7))
@@ -117,13 +128,44 @@ def plotGoodness():
     
     def hover(event):
     
-        if not event.inaxes: 
+        if event.inaxes != ax1: 
                 return
         
         xint = np.floor(event.xdata+0.5)
         yint = np.floor(event.ydata+0.5)
-        update_annot(xint,yint)    
-    
+        update_annot(xint,yint)
+        
+    def onclick(event):
+        #if not event.inaxes: 
+        if event.inaxes != ax1:
+                return
+        xint = np.floor(event.xdata+0.5)
+        yint = np.floor(event.ydata+0.5)
+        delta_midnight = np.linspace(-12, 12, 96)*u.hour
+        tomorrow = firstSunday + dt.timedelta(days=yint + (xint * 7)) + dt.timedelta(days=1)
+        midnight = Time("{}-{}-{} 00:00:00".format(tomorrow.year,tomorrow.month,tomorrow.day)) - utcoffset
+
+        allDay = midnight + delta_midnight
+        allDayFrame = AltAz(obstime=allDay, location=observerLocation)
+        objectAltAziAllDay = objectToObserve.transform_to(allDayFrame)
+        objectAltAllDay = objectAltAziAllDay.alt
+        sunAltAllDay = get_sun(allDay).transform_to(allDayFrame).alt
+        moonAltAziAllDay = get_moon(allDay).transform_to(allDayFrame)
+        moonAltAllDay = moonAltAziAllDay.alt
+        deltaAngles = np.rad2deg(angleBetweenPolarVectors(objectAltAziAllDay,moonAltAziAllDay)) # Great circle angle between the moon and the object
+        ax3.clear()
+        ax3.plot(delta_midnight,objectAltAllDay,color='blue')
+        ax3.plot(delta_midnight,sunAltAllDay,color='red')
+        ax3.plot(delta_midnight,moonAltAllDay,color='black')
+        ax3.plot(delta_midnight,deltaAngles,color='green')
+        ax3.set_title((firstSunday + dt.timedelta(days=yint + (xint * 7))).strftime("%B %d, %Y"), fontsize=8)
+        ax3.set_ylabel('degrees', fontsize=8)
+        ax3.set_xlabel('hours around midnight', fontsize=8)
+        ax3.set_ylim(0,np.max(deltaAngles))
+        
+        
+
+    fig.canvas.mpl_connect('button_press_event', onclick)
     fig.canvas.mpl_connect("motion_notify_event", hover)
     plt.show()
     
