@@ -1,0 +1,10 @@
+{
+  "version": "0.2.1",
+  "tasks": [
+    {
+      "taskName": "task-Astro_Scheduler",
+      "appliesTo": "Astro_Scheduler.py",
+      "type": "launch"
+    }
+  ]
+}

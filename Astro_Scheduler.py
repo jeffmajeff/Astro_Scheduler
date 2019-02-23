@@ -161,7 +161,7 @@ def plotGoodness():
         ax3.set_title((firstSunday + dt.timedelta(days=yint + (xint * 7))).strftime("%B %d, %Y"), fontsize=8)
         ax3.set_ylabel('degrees', fontsize=8)
         ax3.set_xlabel('hours around midnight', fontsize=8)
-        ax3.set_ylim(0,np.max(deltaAngles))
+        ax3.set_ylim(0,np.max([90,np.max(deltaAngles)]))
         
         
 
